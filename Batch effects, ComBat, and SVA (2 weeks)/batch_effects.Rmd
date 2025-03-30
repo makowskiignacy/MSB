@@ -1,0 +1,721 @@
+---
+title: "Batch Effects Analysis"
+output: html_document
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+#### Please Do Not Distribute
+
+## Project ideas
+
+You have to come up with an initial project idea in 3 weeks. You can
+start with a disease, a biological question, a method, and others.
+Please identify and read a recent publication that are interesting to
+you, and make sure that dataset is publicly available. I expect you to
+prepare a 10 min presentation, explaining what this data is about,
+what/why you are interested in, and what you would like to accomplish.
+
+## Homework
+
+Within this notebook, there are five problems for you to complete. These
+problems are written in a blockquote:
+
+> *Homework Problem Example 1:* Make a figure.
+
+## Dependencies
+
+Install the main package we'll be using in this notebook, `sva`. The
+data is prepared and contained in the library `bladderbatch`. R packages
+on CRAN can be installed with `install.packages()`. Bioconductor
+packages are installed by using `BiocManager::install()`. There may be
+challenges in installation procedures. So if basic commands don't work,
+please search.
+
+```{r load_hidden, echo=FALSE, results="hide", warning=FALSE}
+suppressPackageStartupMessages({
+  library(ggplot2)
+  library(devtools)
+  library(Biobase)
+  library(sva)
+  library(bladderbatch)
+  library(broom)
+  library(tidyverse)
+})
+```
+
+```{r load}
+  library(devtools)
+  library(Biobase)
+  library(sva)
+  library(bladderbatch)
+  library(broom)
+  library(tidyverse)
+  library(data.table)
+  library(ggplot2)
+  library(kableExtra)
+  library(tidyverse)
+```
+
+## Correlation between measured technical factors and PCs
+
+As shown in Alter et al. and Johnson et al., PCA, factor models, or
+other related methods can be used to identify and correct for batch
+effects.
+
+Using the Bottomly et al. data from the last week, we will compute
+correlation between some known variables and the top PCs. Load this
+data:
+
+```{r}
+con = url("http://bowtie-bio.sourceforge.net/recount/ExpressionSets/bottomly_eset.RData")
+load(file=con)
+close(con)
+save(bottomly.eset, file="bottomly.Rdata")
+
+load(file="bottomly.Rdata")
+ls()
+
+edata <- as.matrix(exprs(bottomly.eset))
+dim(edata)
+edata[1:5,1:5]
+
+sumna <- apply(edata, 1, function(x) sum(is.na(x)))
+row.variances <- apply(edata, 1, function(x) var(x))
+row.means <- apply(edata, 1, function(x) mean(x))
+plot(row.variances, row.means, pch=19, main="Mean vs. Variance relationship")
+
+hist(row.means,500)
+
+edata <- edata[rowMeans(edata) > 10, ]
+edata <- log2(as.matrix(edata) + 1)
+```
+
+Compute SVD and visualize the top 2 PCs. And using the meta data, we can
+color each data point accordingly:
+
+```{r}
+edata <- t(scale(t(edata), scale=FALSE, center=TRUE))
+svd.out <- svd(edata)
+
+PC = data.table(svd.out$v,pData(bottomly.eset))
+ggplot(PC) + geom_point(aes(x=V1, y=V2, col=as.factor(strain)))
+ggplot(PC) + geom_point(aes(x=V1, y=V2, col=as.factor(lane.number)))
+ggplot(PC) + geom_point(aes(x=V1, y=V2, col=as.factor(experiment.number)))
+```
+
+Compute correlation between a PC and each of measured variables (strain,
+lane.number, and experiment.number):
+
+```{r}
+print(cor(pData(bottomly.eset)$experiment.number, svd.out$v[,1], method="spearman"))
+print(cor(pData(bottomly.eset)$experiment.number, svd.out$v[,2], method="spearman"))
+      
+print(cor(pData(bottomly.eset)$lane.number, svd.out$v[,1], method="spearman"))
+print(cor(pData(bottomly.eset)$lane.number, svd.out$v[,2], method="spearman"))
+```
+
+```{r}
+print(cor(pData(bottomly.eset)$experiment.number, svd.out$v[,1], method="spearman"))
+print(cor(pData(bottomly.eset)$experiment.number, svd.out$v[,2], method="spearman"))
+      
+print(cor(pData(bottomly.eset)$lane.number, svd.out$v[,1], method="spearman"))
+print(cor(pData(bottomly.eset)$lane.number, svd.out$v[,2], method="spearman"))
+```
+
+While this approach was once popular, it has many disadvantages.
+Particularly, we need a large sample size (per batch) and some of PCs
+may involve both batch effects and biological signals. In some cases,
+it's possible that many PCs are moderately related to some technical
+factors.
+
+## Bladder Cancer Gene Expression
+
+We use the microarray gene expression data on 57 bladder samples, that
+were processed in 5 batches. This dataset is available as a
+R/Bioconductor package, `bladderbatch`. This dataset is well known to
+have been confounded. Read the original study:
+
+[Gene expression in the urinary bladder: a common carcinoma in situ gene
+expression signature exists disregarding histopathological
+classification.](https://cancerres.aacrjournals.org/content/canres/64/11/4040.full.pdf)
+
+As this is also an ExpressionSet, the steps to extract expression data
+and meta data are identical to the last 2 weeks.
+
+```{r}
+library(bladderbatch)
+data(bladderdata)
+
+# sample info
+pheno = pData(bladderEset)
+# expression data
+edata = exprs(bladderEset)
+
+dim(pheno)
+dim(edata)
+#edata <- edata[1:10000,]
+edata[1:5,1:10]
+```
+
+## Dive into data about samples
+
+It is important to look at phenotype data, to check out seq lanes, prep
+dates, and other experimental batches. Then, remove rows with NA, NaN,
+etc.
+
+```{r}
+head(pheno) 
+
+sumna <- apply(edata, 1, function(x) sum(is.na(x)))
+row.variances <- apply(edata, 1, function(x) var(x))
+row.means <- apply(edata, 1, function(x) mean(x))
+plot(row.variances, row.means, pch=19, main="Mean vs. Variance relationship")
+
+edata <- edata[row.variances < 6,]
+edata.log <- log2(edata)
+```
+
+Scale the rows and apply SVD. For exploration, we are proceeding with
+data data and centered-and-scaled data:
+
+```{r}
+edata.scaled <- t(scale(t(edata.log), scale=TRUE, center=TRUE))
+edata.centered <- t(scale(t(edata.log), scale=FALSE, center=TRUE))
+
+svd.centered.out <- svd(edata.centered)
+svd.centered.plot <- data.table(svd.centered.out$v[,1:10], pheno)
+
+svd.scaled.out <- svd(edata.scaled)
+svd.scaled.plot <- data.table(svd.scaled.out$v[,1:10], pheno)
+```
+
+Visualize the scatterplot, while labeling each sample with information
+(batch or cancer):
+
+```{r}
+ggplot(svd.centered.plot) + geom_point(aes(x=V1, y=V2, col=as.factor(batch)))
+ggplot(svd.centered.plot) + geom_point(aes(x=V1, y=V2, col=as.factor(cancer)))
+
+ggplot(svd.scaled.plot) + geom_point(aes(x=V1, y=V2, col=as.factor(batch)))
+ggplot(svd.scaled.plot) + geom_point(aes(x=V1, y=V2, col=as.factor(cancer)))
+```
+
+> *Homework Problem 1:* Create a table to show the batch effects (refer
+> to Figure 1 in Gilad and Mizrahi-Man, 2015). There are 5 batches
+> (`pheno$batch`); how are biological variables and other variables
+> related to study design are distributed among those 5 batches? Explain
+> what could be a problem. Prepare this into a PDF file.
+
+```{r}
+table(pheno$batch, pheno$cancer)
+table(pheno$batch, pheno$outcome)
+```
+
+```{r}
+batch_cancer_data <- data.frame(
+  Sample = rownames(pheno),
+  Batch = pheno$batch,
+  Cancer = pheno$cancer,
+  Outcome = pheno$outcome
+)
+
+batch_table <- batch_cancer_data %>%
+  group_by(Batch, Cancer) %>%
+  summarize(
+    Count = n(),
+    Outcomes = paste(sort(unique(Outcome)), collapse=", "),
+    .groups = "drop"
+  )
+
+summary_html <- kable(batch_table, "html") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed")) %>%
+  column_spec(1, bold = TRUE) %>%
+  column_spec(2, color = case_when(
+    batch_table$Cancer == "Normal" ~ "blue",
+    batch_table$Cancer == "Cancer" ~ "red",
+    batch_table$Cancer == "Biopsy" ~ "green",
+    TRUE ~ "black"
+  )) %>%
+  collapse_rows(columns = 1)
+
+save_kable(summary_html, file = "makowski_problem1.html")
+
+summary_html
+```
+
+# Linear model with technical variables
+
+## Fitting a linear model with the least squares
+
+When technical variables are known, we can add that to a well known
+linear model. Note that for our own convenience, we tell R to use
+"Normal" as a base factor:
+
+```{r}
+pheno$cancer = relevel(pheno$cancer, ref="Normal")
+```
+
+We will fit this model on one variable, namely the first gene in gene
+expression data.
+
+```{r}
+mod = lm(edata[1,] ~ as.factor(pheno$cancer) + as.factor(pheno$batch))
+print(mod)
+```
+
+You now can fit this linear model on all 22283 genes. We look at the
+coefficients related to the cancer:
+
+```{r}
+pheno$cancer = relevel(pheno$cancer, ref="Normal")
+mod = lm(t(edata) ~ as.factor(pheno$cancer) + as.factor(pheno$batch))
+names(mod)
+dim(mod$coefficients)
+rownames(mod$coefficients)
+
+# library "broom" clean up the outputs of LM
+# now, we can use ggplot2 to plot various aspects of LM
+library(broom)
+mod_tidy <- tidy(mod)
+ggplot(mod_tidy) + geom_histogram(aes(x=estimate), bins = 100, fill="darkorange")
+
+# however, the previous line of code make a histogram of all coefficients.
+# what we need to do is to find estimates of particular regression terms.
+mod_tidy %>% filter(term == "as.factor(pheno$cancer)Cancer")
+
+ggplot(mod_tidy %>% filter(term == "as.factor(pheno$cancer)Cancer")) + geom_histogram(aes(x=estimate), bins = 100, fill="darkorange")
+
+# how about the p-values?
+ggplot(mod_tidy %>% filter(term == "as.factor(pheno$cancer)Cancer")) + geom_histogram(aes(x=p.value), bins = 100, fill="darkorange")
+```
+
+Explore convenient functions, `filter` and `select`. `filter` that allow
+you to choose rows based on logical statements based on a specific
+column. With `select`, you can select columns.
+
+# Empirical Bayes
+
+## Using ComBat to clean a dataset
+
+ComBat effectively remove the unwanted variation due to the known and
+specified technical variables. The `batch` argument only expect one
+technical variable. You can also specify a model matrix (as shown
+`model.matrix`) which include further adjustment variables. This will
+return the cleaned data, in which you can apply a linear model.
+
+```{r}
+library(sva)
+batch = pheno$batch
+combat_edata = ComBat(dat=edata, batch=pheno$batch, mod=model.matrix(~1, data=pheno), par.prior=TRUE, prior.plots=TRUE)
+```
+
+Just because I ran a certain algorithm that is designed to remove batch
+effects doesn't necessarily mean that batch effects are removed. It is
+necessarily to check what has been returned:
+
+```{r}
+class(combat_edata)
+dim(combat_edata)
+combat_edata[1:10,1:10]
+
+## compare heatmaps before vs. after
+library(gplots)
+library(RColorBrewer)
+my_palette <- colorRampPalette(c("blue", "white", "darkred"))(n = 299)
+
+edata_sub <- edata[,]
+
+png("bladder.png",height=700,width=700)
+heatmap.2(edata,
+          main = "Bladder Cancer Data Clustered", # heat map title
+          notecol="black",      # change font color of cell labels to black
+          density.info="none",  # turns off density plot inside color legend
+          trace="none",         # turns off trace lines inside the heat map
+          margins =c(12,9),     # widens margins around plot
+          col=my_palette,       # use on color palette defined earlier 
+          dendrogram="none",     # only draw a row dendrogram
+          scale = "row")
+dev.off()
+
+png("bladder_combat.png",height=700,width=700)
+heatmap.2(combat_edata,
+          main = "Bladder Cancer Data Cleaned by ComBat", # heat map title
+          notecol="black",      # change font color of cell labels to black
+          density.info="none",  # turns off density plot inside color legend
+          trace="none",         # turns off trace lines inside the heat map
+          margins =c(12,9),     # widens margins around plot
+          col=my_palette,       # use on color palette defined earlier 
+          dendrogram="none",     # only draw a row dendrogram
+          scale = "row")
+dev.off()
+```
+
+Evaluate if the cleaned data from ComBat has no relation to batch
+effects:
+
+```{r}
+svd.out.combat <- svd(combat_edata)
+svd.combat.plot <- data.table(svd.out.combat$v[,1:10], pheno)
+
+ggplot(svd.combat.plot) + geom_point(aes(x=V1, y=V2, col=as.factor(batch)))
+```
+
+> *Homework Problem 2:* Make heatmaps, BEFORE and AFTER cleaning the
+> data using ComBat, where columns are arranged according to the study
+> design. You must sort the columns such that 5 batches are shown.
+> Cluster the rows, but do not cluster the columns (samples) when
+> drawing a heatmap. The general idea is that you want to see if the
+> Combat-cleaned data are any improvement in the general patterns.
+
+```{r}
+col_order <- order(pheno$batch)
+edata_ordered <- edata[, col_order]
+combat_edata_ordered <- combat_edata[, col_order]
+
+png("makowski_problem2_before.png", width = 800, height = 800)
+heatmap.2(edata_ordered,
+  Rowv = TRUE, Colv = FALSE, dendrogram = "row",
+  scale = "row", trace = "none",
+  main = "Before ComBat"
+)
+dev.off()
+
+png("makowski_problem2_after.png", width = 800, height = 800)
+heatmap.2(combat_edata_ordered,
+  Rowv = TRUE, Colv = FALSE, dendrogram = "row",
+  scale = "row", trace = "none",
+  main = "After ComBat"
+)
+dev.off()
+```
+
+> *Homework Problem 3:* Make heatmaps of Pearson correlations statistics
+> of samples. For example, see Figure 2 and 3 freom Gilad and
+> Mizrahi-Man (2015) F1000Research:
+> \url{https://f1000research.com/articles/4-121}. First, compute the
+> correlation statistics among columns. Second, create a heatmap using
+> heatmap.2(). Make sure to create or add labels for samples (cancer vs.
+> normal; batch numbers; others)
+
+```{r}
+cor_matrix <- cor(combat_edata_ordered, method = "pearson")
+col_labels <- paste(pheno$cancer, pheno$batch, sep = "_")
+
+png("makowski_problem3.png", width = 800, height = 800)
+heatmap.2(cor_matrix,
+  Rowv = TRUE, Colv = TRUE, dendrogram = "both",
+  scale = "none", trace = "none",
+  labRow = col_labels, labCol = col_labels,
+  main = "Pearson Correlation Heatmap",
+  margins = c(12, 12)
+)
+dev.off()
+```
+
+Now we can fit the linear model with a cleaned data.
+
+```{r}
+modcombat = lm(t(combat_edata) ~ as.factor(pheno$cancer))
+
+# library "broom" clean up the outputs of LM
+# now, we can use ggplot2 to plot various aspects of LM
+library(broom)
+modcombat_tidy <- tidy(modcombat)
+
+# histogram of estimates of particular regression terms.
+ggplot(modcombat_tidy %>% filter(term == "as.factor(pheno$cancer)Cancer")) + geom_histogram(aes(x=estimate), bins = 100, fill="darkorange")
+
+# different way of looking at coefficients from many different models
+# the vertical line indicates the zero coefficient.
+ggplot(modcombat_tidy, aes(estimate, term)) +
+     geom_point() +
+     geom_vline(xintercept = 0)
+```
+
+Compare the empirical Bayes estimates to the conventional linear models.
+In the scatter plot below, the red line indicates the identity. The blue
+line indicates the linear line that has been fitted into the actual
+estimates from two approaches. What we observe is that the estimates
+from the ComBat-cleaned data are shrunken towards 0 compared to the
+estimates from the previous linear models. This phenomenon is called
+shrinkage or regularization, which plays a critical role in
+high-dimensional data analysis.
+
+```{r}
+# filter : choose ROWS 
+# select : choose COLS
+est_compare <- tibble(
+  LinearModel = mod_tidy %>% filter(term == "as.factor(pheno$cancer)Cancer") %>% select("estimate") %>% unlist,
+  ComBat = modcombat_tidy %>% filter(term == "as.factor(pheno$cancer)Cancer") %>% select("estimate") %>% unlist)
+
+ggplot(est_compare, aes(x=LinearModel, y=ComBat)) +
+     geom_point(col="darkgrey", alpha=.5, size=.5) + geom_abline(intercept=0, slope=1, col="darkred") + geom_smooth(method = "lm", se = TRUE)  + theme_bw()
+```
+
+Let's look at the p-values. The majority of variables are still very
+significant, although it's less so that p-values from the least square
+method.
+
+```{r}
+ggplot(modcombat_tidy %>% filter(term == "as.factor(pheno$cancer)Cancer")) + geom_histogram(aes(x=p.value), bins = 100, fill="darkorange")
+```
+
+> *Homework Problem 4:* Apply two different Linear Models to the
+> Bottomly et al. data. First, using a conventional approach, create a
+> linear model with a genetic strain (biological variable) and an
+> experimental number (technical variable) on **uncorrected** gene
+> expression data.
+
+```{r}
+pheno_bottomly <- pData(bottomly.eset)
+edata_bottomly <- as.matrix(exprs(bottomly.eset))
+
+mod_uncorrected <- lm(
+  t(edata_bottomly) ~ as.factor(pheno_bottomly$strain) + as.factor(pheno_bottomly$experiment.number)
+)
+
+names(mod_uncorrected)
+dim(mod_uncorrected$coefficients)
+rownames(mod_uncorrected$coefficients)
+
+mod_tidy_uncorrected <- tidy(mod_uncorrected)
+ggplot(mod_tidy_uncorrected) + geom_histogram(aes(x=estimate), bins = 100, fill="darkorange")
+
+png("makowski_problem4_uncorrected_estimates.png", width = 800, height = 600)
+ggplot(mod_tidy_uncorrected, aes(x=estimate)) +
+  geom_histogram(bins=100, fill="darkorange") +
+  labs(title="Estimates (Uncorrected)")
+dev.off()
+```
+
+> Second, create a linear model with a genetic strain (biological
+> variables) on **corrected** gene expression data from ComBat. Make a
+> scatter plots of coefficients and a histogram of p-values as done in
+> this notebook. Make sure that you are pulling out the correct
+> coefficients, not any or all coefficients.
+
+```{r}
+batch <- as.factor(pheno_bottomly$experiment.number)
+
+combat_edata_bottomly <- ComBat(
+  dat = edata_bottomly,
+  batch = batch,
+  mod = model.matrix(~1, data = pheno_bottomly),
+  par.prior = TRUE,
+  prior.plots = FALSE
+)
+
+mod_corrected <- lm(
+  t(combat_edata_bottomly) ~ as.factor(pheno_bottomly$strain)
+)
+
+mod_corrected_tidy <- broom::tidy(mod_corrected)
+
+strain_coef_corrected <- mod_corrected_tidy %>%
+  dplyr::filter(grepl("as.factor\\(pheno_bottomly\\$strain\\)", term))
+
+strain_coef_corrected$gene_index <- seq_len(nrow(strain_coef_corrected))
+
+png("makowski_problem4_corrected_strain_coef.png", width = 800, height = 600)
+ggplot(strain_coef_corrected, aes(x=gene_index, y=estimate)) +
+  geom_point(alpha=0.5) +
+  labs(title="Strain Coefficients (ComBat-Corrected)")
+dev.off()
+
+png("makowski_problem4_corrected_pvalues.png", width = 800, height = 600)
+ggplot(strain_coef_corrected, aes(x=p.value)) +
+  geom_histogram(bins=50, fill="darkorange", alpha=0.7) +
+  labs(title="P-value Distribution (ComBat-Corrected)")
+dev.off()
+```
+
+# Surrogate Variable Analysis (SVA)
+
+## Finding a dimension of surrogate variables
+
+When the technical variables are not known or there are additional
+dependence across the noise term, SVA can be used to estimate and
+correct for a dependence kernel.
+
+The hyper parameter required for SVA is the number of surrogate
+variables. This is very challenging with numerous methods available. The
+package SVA provides two methods to estimate the number of surrogate
+variables, `n.sv`.
+
+```{r}
+mod = model.matrix(~as.factor(cancer), data=pheno)
+
+set.seed(1)
+rnorm(1)
+# permutation procedure from Buja and Eyuboglu 1992
+num.sv(edata,mod,method="be")
+# asymptotic approach from Leek 2011 Biometrics.
+num.sv(edata,mod,method="leek")
+```
+
+We will go with the Leek 2011 method, e.g., `method="leek"`.
+
+## Estimating surrogate variables (SVs)
+
+We fit SVA without specifying any known technical variables.
+Essentially, we are hoping that SVA can recover the batch effects
+(including 5 batches that we know).
+
+```{r}
+mod = model.matrix(~as.factor(cancer),data=pheno)
+mod0 = model.matrix(~1, data=pheno)
+sva_output = sva(edata, mod, mod0, n.sv=num.sv(edata,mod,method="leek"))
+```
+
+Once SVs are estimated, we proceed to check how they may be related to
+the known technical variables. See the LM output:
+
+```{r}
+head(sva_output$sv)
+# summary shows how the batches are related to SV1 and SV2 separately.
+# which SV have more information about pheno$batch? 
+summary(lm(sva_output$sv ~ pheno$batch))
+```
+
+## Visualizing and exploring SVs
+
+Now, perhaps that SV2 and SV3 are strongly related to the batch effect
+(i.e. technical variable).
+
+Lets make the scatter plot using SV1 and SV2. The data points are
+colored by their pheno data.
+
+```{r}
+sva_batch <- tibble(SV1=sva_output$sv[,1],
+                  SV2=sva_output$sv[,2],
+                  SV3=sva_output$sv[,3],
+                  SV4=sva_output$sv[,4],
+                  batch=as.factor(pheno$batch),
+                  cancer=as.factor(pheno$cancer),
+                  outcome=as.factor(pheno$outcome))
+
+ggplot(sva_batch) + geom_point(aes(x=SV1,y=SV2, col=batch))
+ggplot(sva_batch) + geom_point(aes(x=SV1,y=SV2, col=cancer))
+ggplot(sva_batch) + geom_point(aes(x=SV1,y=SV2, col=outcome))
+```
+
+We further make the violin plots of values of SVs, stratified by the
+five batches. If the values of SVs are separately (differentially
+distributed) among batches, that may be an evidence that SVA are
+capturing the known technical variables.
+
+```{r}
+sva_batch <- tibble(SV1=sva_output$sv[,1],
+                  SV2=sva_output$sv[,2],
+                  SV3=sva_output$sv[,3],
+                  SV4=sva_output$sv[,4],
+                  batch=as.factor(pheno$batch))
+sva_batch_gather <- gather(sva_batch,"sv","value",-batch)
+
+ggplot(sva_batch_gather) + geom_violin(aes(x=batch,y=value)) + facet_wrap(~ sv, ncol = 1)
+
+ggplot(sva_batch_gather) + geom_violin(aes(x=batch,y=value)) + facet_wrap(~ sv, ncol = 1) + geom_jitter(aes(x=batch,y=value,col=batch))
+```
+
+It seems that 2 surrogate variables (SVs) contain substantial
+information about a known technical variable. Therefore, we proceed to
+fit the model.
+
+Note that the following code to visualize estimates are rather complex
+and long. We are using `filter` to choose rows (cancer factors) and
+`select` to choose estimates (coefficients).
+
+## Fitting a LM with surrogate variables
+
+```{r}
+# Add the surrogate variables to the model matrix
+modsva = lm(t(edata) ~ as.factor(pheno$cancer) + sva_output$sv)
+modsva_tidy <- tidy(modsva)
+
+est_compare <- tibble(
+  LinearModel = mod_tidy %>% filter(term == "as.factor(pheno$cancer)Cancer") %>% select("estimate") %>% unlist,
+  
+  ComBat = modcombat_tidy %>% filter(term == "as.factor(pheno$cancer)Cancer") %>% select("estimate") %>% unlist,
+  
+  SVA = modsva_tidy %>% filter(term == "as.factor(pheno$cancer)Cancer") %>% select("estimate") %>% unlist)
+
+ggplot(est_compare, aes(x=LinearModel, y=SVA)) +
+     geom_point(col="darkgrey", alpha=.5, size=.5) + geom_abline(intercept=0, slope=1, col="darkred") + geom_smooth(method = "lm", se = TRUE)  + theme_bw()
+
+ggplot(est_compare, aes(x=ComBat, y=SVA)) +
+     geom_point(col="darkgrey", alpha=.5, size=.5) + geom_abline(intercept=0, slope=1, col="darkred") + geom_smooth(method = "lm", se = TRUE)  + theme_bw()
+```
+
+At last, let's look at the p-values from SVA.
+
+```{r}
+ggplot(modsva_tidy %>% filter(term == "as.factor(pheno$cancer)Cancer")) + geom_histogram(aes(x=p.value), bins = 100, fill="darkorange")
+```
+
+It seems that even though the estimates are shrunken towards to zero and
+the surrogate variables have approximated the technical variables well,
+the p-values as a whole may not changed so much.
+
+```{r}
+pvalues <- tibble(
+  LinearModel = mod_tidy %>% filter(term == "as.factor(pheno$cancer)Cancer") %>% select("p.value") %>% unlist,
+  ComBat = modcombat_tidy %>% filter(term == "as.factor(pheno$cancer)Cancer") %>% select("p.value") %>% unlist,
+  SVA = modsva_tidy %>% filter(term == "as.factor(pheno$cancer)Cancer") %>% select("p.value") %>% unlist)
+
+pvalues_gather <- gather(pvalues)
+ggplot(pvalues_gather, aes(x=value)) + geom_histogram() + facet_wrap(~key)
+
+# pi0 from the original data ~ 0.26
+# pi0 from a combat-cleaned data ~ 0.28
+# pi0 from SVA ~ 0.27
+```
+
+> *Homework Problem 5:* Apply ComBat and SVA to the Bottomly et al.
+> data. Make a scatter plots of coefficients and a histogram of
+> p-values, comparing results based on ComBat and SVA. Assume that the
+> biological variables in Bottomly et al data is the genetic strains.
+> Make sure that you are pulling out the correct coefficients/pvalues,
+> not any or all of them.
+
+```{r}
+edata_bottomly_unzeroed <- edata_bottomly[rowSums(edata_bottomly) != 0, ]
+
+combat_bottomly <- ComBat(
+  dat = edata_bottomly_unzeroed,
+  batch = as.factor(pheno_bottomly$experiment.number),
+  mod = model.matrix(~1, data = pheno_bottomly),
+  par.prior = TRUE,
+  prior.plots = FALSE
+)
+mod_combat <- lm(t(combat_bottomly) ~ as.factor(pheno_bottomly$strain))
+tidy_combat <- tidy(mod_combat) %>% dplyr::filter(grepl("strain", term))
+
+mod_strain <- model.matrix(~as.factor(strain), data=pheno_bottomly)
+mod0_strain <- model.matrix(~1, data=pheno_bottomly)
+
+sva_out <- sva(edata_bottomly_unzeroed, mod_strain, mod0_strain, n.sv=2)
+mod_sva <- lm(t(edata_bottomly_unzeroed) ~ as.factor(pheno_bottomly$strain) + sva_out$sv)
+tidy_sva <- tidy(mod_sva) %>% dplyr::filter(grepl("strain", term))
+
+coef_data <- data.frame(
+  ComBat = tidy_combat$estimate,
+  SVA    = tidy_sva$estimate
+)
+
+pdf("makowski_problem5.pdf")
+
+ggplot(coef_data, aes(x=ComBat, y=SVA)) +
+  geom_point(alpha=0.5) + geom_abline(slope=1, intercept=0, col="red") +
+  ggtitle("Strain Coefficients: ComBat vs. SVA")
+
+ggplot(tidy_combat, aes(x=p.value)) +
+  geom_histogram(bins=50, fill="dodgerblue", alpha=0.7) +
+  ggtitle("ComBat p-values")
+ggplot(tidy_sva, aes(x=p.value)) +
+  geom_histogram(bins=50, fill="firebrick", alpha=0.7) +
+  ggtitle("SVA p-values")
+
+dev.off()
+```
