@@ -1,0 +1,20 @@
+{
+  "dataset_name": "pathmnist",
+  "n_classes": 9,
+  "class_names": [
+    "adipose",
+    "background",
+    "debris",
+    "lymphocytes",
+    "mucus",
+    "smooth muscle",
+    "normal colon mucosa",
+    "cancer-associated stroma",
+    "colorectal adenocarcinoma epithelium"
+  ],
+  "train_samples": 89996,
+  "val_samples": 10004,
+  "test_samples": 7180,
+  "batch_size": 16,
+  "device": "mps"
+}

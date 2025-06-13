@@ -1,0 +1,42 @@
+[2025-06-14 00:09:10] Checking dependencies...
+[2025-06-14 00:09:10] obzai package available
+[2025-06-14 00:09:10] === Starting Lung Nodules XAI Analysis ===
+[2025-06-14 00:09:10] Setting up NoduleMNIST dataset...
+[2025-06-14 00:09:21] Saved JSON to results/dataset_info.json
+[2025-06-14 00:09:21] Dataset setup complete. Ref: 165, Test: 310
+[2025-06-14 00:09:21] Loading pretrained DINO model...
+[2025-06-14 00:09:21] Downloading weights to tuned_models/lidc_dino_s8.pth...
+[2025-06-14 00:09:28] Download completed
+[2025-06-14 00:09:29] Model loaded successfully
+[2025-06-14 00:09:29] Creating visualization: nodule_samples
+[2025-06-14 00:09:29] Saved figure to results/visualizations/nodule_samples.png
+[2025-06-14 00:09:29] Making predictions...
+[2025-06-14 00:09:31] Saved JSON to results/predictions/predictions_results.json
+[2025-06-14 00:09:31] Sample 1: Predicted=malignant, True=malignant, Prob=0.864
+[2025-06-14 00:09:31] Sample 2: Predicted=benign, True=benign, Prob=0.065
+[2025-06-14 00:09:31] Sample 3: Predicted=benign, True=benign, Prob=0.044
+[2025-06-14 00:09:31] Sample 4: Predicted=benign, True=benign, Prob=0.012
+[2025-06-14 00:09:31] Sample 5: Predicted=malignant, True=malignant, Prob=0.981
+[2025-06-14 00:09:31] Setting up XAI tools...
+[2025-06-14 00:09:31] XAI tools configured successfully
+[2025-06-14 00:09:31] Generating attention maps...
+[2025-06-14 00:09:31] Saved numpy array to results/explanations/attention_maps.npy
+[2025-06-14 00:09:32] Saved figure to results/explanations/attention_maps_comparison.png
+[2025-06-14 00:09:32] Saved figure to results/explanations/attention_maps_overlay.png
+[2025-06-14 00:09:32] Attention maps generated and saved
+[2025-06-14 00:09:32] Generating CDAM maps...
+[2025-06-14 00:09:36] Saved numpy array to results/explanations/cdam_maps.npy
+[2025-06-14 00:09:36] Saved figure to results/explanations/cdam_maps_comparison.png
+[2025-06-14 00:09:37] Saved figure to results/explanations/cdam_maps_detailed.png
+[2025-06-14 00:09:37] CDAM maps generated and saved
+[2025-06-14 00:09:37] Setting up outlier detection...
+[2025-06-14 00:09:49] Outlier detection setup complete
+[2025-06-14 00:09:49] Starting PathMNIST homework...
+[2025-06-14 00:09:49] PathMNIST: 9 classes, Names: ['adipose', 'background', 'debris', 'lymphocytes', 'mucus', 'smooth muscle', 'normal colon mucosa', 'cancer-associated stroma', 'colorectal adenocarcinoma epithelium']
+[2025-06-14 00:09:58] PathMNIST loaded: Train=89996, Val=10004, Test=7180
+[2025-06-14 00:09:58] Saved JSON to results/predictions/pathmnist_info.json
+[2025-06-14 00:09:58] Saved figure to results/visualizations/pathmnist_samples.png
+[2025-06-14 00:09:58] PathMNIST homework visualization saved
+[2025-06-14 00:09:58] Saved JSON to results/execution_summary.json
+[2025-06-14 00:09:58] === Analysis Complete ===
+[2025-06-14 00:09:58] All results saved to: /Users/ignacy/Desktop/BIOINF-M1/MCBS/results

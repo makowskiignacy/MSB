@@ -1,0 +1,31 @@
+{
+  "predictions": {
+    "predicted_classes": [
+      "malignant",
+      "benign",
+      "benign",
+      "benign",
+      "malignant"
+    ],
+    "true_classes": [
+      "malignant",
+      "benign",
+      "benign",
+      "benign",
+      "malignant"
+    ],
+    "probabilities": [
+      0.863561749458313,
+      0.06457722932100296,
+      0.044181566685438156,
+      0.012353419326245785,
+      0.9813302159309387
+    ],
+    "accuracy": 1.0
+  },
+  "model_info": {
+    "device": "mps",
+    "model_type": "DINO_ViT",
+    "task": "binary_classification"
+  }
+}

@@ -1,0 +1,13 @@
+# Requirements for Lung Nodules XAI on Mac M-series
+# Install with: pip install -r requirements.txt
+
+torch>=2.0.0
+torchvision>=0.15.0
+transformers>=4.30.0
+medmnist>=2.2.3
+gdown>=4.7.1
+matplotlib>=3.7.0
+numpy>=1.24.0
+obzai>=0.1.0
+scikit-learn>=1.3.0
+Pillow>=9.5.0

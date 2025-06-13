@@ -1,0 +1,18 @@
+{
+  "execution_summary": {
+    "timestamp": "2025-06-14T00:09:58.205982",
+    "device": "mps",
+    "nodule_prediction_accuracy": 1.0,
+    "attention_maps_generated": true,
+    "cdam_maps_generated": true,
+    "outlier_detection_setup": true,
+    "homework_completed": true
+  },
+  "files_generated": {
+    "predictions": "predictions/predictions_results.json",
+    "dataset_info": "dataset_info.json",
+    "attention_maps": "explanations/attention_maps.npy",
+    "cdam_maps": "explanations/cdam_maps.npy",
+    "pathmnist_info": "predictions/pathmnist_info.json"
+  }
+}

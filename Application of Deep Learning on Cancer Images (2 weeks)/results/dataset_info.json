@@ -1,0 +1,10 @@
+{
+  "reference_samples": 165,
+  "inference_samples": 310,
+  "batch_size": 16,
+  "class_names": [
+    "benign",
+    "malignant"
+  ],
+  "device": "mps"
+}
